@@ -4,7 +4,8 @@ import os
 
 def normalize_text(text):
     """
-    标准化文本：转小写，将标点符号替换为空格，去除首尾空格。
+    Normalize text: convert to lowercase, replace punctuation with spaces,
+    and remove leading and trailing spaces.
     """
     if not text:
         return ""
@@ -14,7 +15,7 @@ def normalize_text(text):
 
 def extract_subject_from_question(question_text):
     """
-    提取 's 之前的人名。
+    Extract the person's name before 's.
     """
     clean_q = question_text.strip()
     match = re.search(r"^(.*?)'s\b", clean_q)
@@ -55,7 +56,7 @@ def evaluate_single_sample(question, ground_truth, model_answer):
 
 def save_category_file(output_dir, type_id, type_name, data_list):
     """
-    辅助函数：将特定类别的错误列表写入 txt 文件
+    Helper function: write the error list of a specific category to a txt file.
     """
     filename = os.path.join(output_dir, f"type_{type_id}_{type_name}.txt")
     with open(filename, 'w', encoding='utf-8') as f:
@@ -72,10 +73,10 @@ def save_category_file(output_dir, type_id, type_name, data_list):
                 f.write(f"Subject Detected: {item['extracted_subject']}\n")
             f.write("-" * 30 + "\n")
     
-    print(f"✅ 已保存: {filename} (包含 {len(data_list)} 条)")
+    print(f"Saved: {filename} (contains {len(data_list)} entries)")
 
 def analyze_model_results(questions_file, ground_truth_file, answers_file, output_dir="./analysis_result"):
-    print(f"--- 开始执行错误分析 ---")
+    print(f"--- Starting error analysis ---")
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -95,11 +96,11 @@ def analyze_model_results(questions_file, ground_truth_file, answers_file, outpu
             model_answers = [line.strip() for line in f]
 
     except Exception as e:
-        print(f"❌ 读取文件出错: {e}")
+        print(f"Error reading file: {e}")
         return
 
     min_len = min(len(questions), len(ground_truths), len(model_answers))
-    print(f"有效对齐样本数: {min_len}")
+    print(f"Number of valid aligned samples: {min_len}")
     if min_len == 0: return
 
     categorized_data = {
@@ -128,22 +129,22 @@ def analyze_model_results(questions_file, ground_truth_file, answers_file, outpu
     stats = {k: len(v) for k, v in categorized_data.items()}
     
     print("\n" + "=" * 50)
-    print("📊 分析统计报告")
+    print("Analysis Statistics Report")
     print("=" * 50)
-    print(f"总样本数: {total}")
-    print(f"Type 0 (完全正确): {stats[0]} ({stats[0]/total*100:.2f}%)")
-    print(f"Type 1 (复述实体): {stats[1]} ({stats[1]/total*100:.2f}%)")
-    print(f"Type 2 (部分正确): {stats[2]} ({stats[2]/total*100:.2f}%)")
-    print(f"Type 3 (完全错误): {stats[3]} ({stats[3]/total*100:.2f}%)")
+    print(f"Total samples: {total}")
+    print(f"Type 0 (Completely Correct): {stats[0]} ({stats[0]/total*100:.2f}%)")
+    print(f"Type 1 (Repeated Subject): {stats[1]} ({stats[1]/total*100:.2f}%)")
+    print(f"Type 2 (Partially Correct): {stats[2]} ({stats[2]/total*100:.2f}%)")
+    print(f"Type 3 (Completely Wrong): {stats[3]} ({stats[3]/total*100:.2f}%)")
     print("=" * 50)
 
-    print("\n正在保存分类文件...")
+    print("\nSaving categorized files...")
     save_category_file(output_dir, 0, "correct", categorized_data[0])
     save_category_file(output_dir, 1, "repeat_subject", categorized_data[1])
     save_category_file(output_dir, 2, "partial_match", categorized_data[2])
     save_category_file(output_dir, 3, "completely_wrong", categorized_data[3])
     
-    print(f"分析完成。所有结果已保存在目录: {output_dir}")
+    print(f"Analysis completed. All results have been saved in the directory: {output_dir}")
 
 if __name__ == "__main__":
     Q_PATH = "qa_negative_negative_questions.txt"

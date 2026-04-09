@@ -31,8 +31,8 @@ MASK_TOKEN_ID = 126336
 
 def forward_process(input_ids, eps=1e-3):
     """
-    对输入进行随机掩盖（加噪声），LLaDA 预训练核心。
-    此函数现在只负责加噪，不再处理随机截断。
+    Randomly mask the input (add noise), which is the core of LLaDA pretraining.
+    This function now only handles noise addition and no longer processes random truncation.
     """
     b, l = input_ids.shape
     t = torch.rand(b, device=input_ids.device)
@@ -61,7 +61,7 @@ def save_hf_checkpoint_zero3(model_engine, tokenizer, output_dir, is_main):
         if getattr(model_engine.module, "gradient_checkpointing_disable", None):
             model_engine.module.gradient_checkpointing_disable()
     except Exception as e:
-        logger.warning(f"[保存前提示] 关闭 checkpointing 出现可忽略警告: {e}")
+        logger.warning(f"[Pre-save notice] A non-critical warning occurred while disabling checkpointing: {e}")
 
     try:
         if hasattr(torch, "npu"):
@@ -79,7 +79,7 @@ def save_hf_checkpoint_zero3(model_engine, tokenizer, output_dir, is_main):
                 gathered_sd = model_engine.module.state_dict()
     except Exception as e:
         if is_main:
-            logger.error(f"[错误] 在 ZeRO-3 聚合阶段获取 state_dict 失败：{e}")
+            logger.error(f"[Error] Failed to obtain state_dict during ZeRO-3 aggregation: {e}")
             traceback.print_exc()
 
     if dist.is_initialized():
@@ -109,16 +109,16 @@ def save_hf_checkpoint_zero3(model_engine, tokenizer, output_dir, is_main):
                     safe_serialization=True
                 )
             else:
-                logger.warning("[警告] 未拿到聚合后的 state_dict，退回直接 save_pretrained（可能不稳定）。")
+                logger.warning("[Warning] Aggregated state_dict was not obtained; falling back to direct save_pretrained (may be unstable).")
                 model_engine.module.save_pretrained(
                     output_dir,
                     safe_serialization=True
                 )
 
             tokenizer.save_pretrained(output_dir)
-            logger.info(f"✅ 模型已完整保存到: {output_dir}")
+            logger.info(f"Model has been fully saved to: {output_dir}")
         except Exception as e:
-            logger.error(f"[错误] save_pretrained 写盘失败：{e}")
+            logger.error(f"[Error] save_pretrained failed while writing to disk: {e}")
             traceback.print_exc()
 
     if dist.is_initialized():
@@ -128,7 +128,7 @@ def save_hf_checkpoint_zero3(model_engine, tokenizer, output_dir, is_main):
 def main():
     start_time = datetime.now()
 
-    parser = argparse.ArgumentParser(description="LLaDA 预训练脚本 (DeepSpeed 框架)")
+    parser = argparse.ArgumentParser(description="LLaDA pretraining script (DeepSpeed framework)")
     parser.add_argument("--model_name_or_path", type=str, required=True)
     parser.add_argument("--dataset_name", type=str, required=True)
     parser.add_argument("--output_dir", type=str, required=True)
@@ -140,7 +140,7 @@ def main():
     parser.add_argument("--block_size", type=int, default=4096)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--local_rank", type=int, default=-1)
-    parser.add_argument("--ckpt_strategy",type=str,default="whole_layer",choices=["off", "whole_layer", "one_in_two", "one_in_three", "one_in_four", "fine_grained"],help="LLaDA 激活检查点策略。off 表示关闭。")
+    parser.add_argument("--ckpt_strategy",type=str,default="whole_layer",choices=["off", "whole_layer", "one_in_two", "one_in_three", "one_in_four", "fine_grained"],help="LLaDA activation checkpointing strategy. 'off' means disabled.")
 
     parser = deepspeed.add_config_arguments(parser)
     args = parser.parse_args()
@@ -153,7 +153,7 @@ def main():
     elif is_cuda:
         device_type = "cuda"
     else:
-        raise RuntimeError("未检测到任何可用的 NPU 或 GPU 设备。")
+        raise RuntimeError("No available NPU or GPU device was detected.")
 
     if args.local_rank != -1:
         if device_type == "npu":
@@ -169,10 +169,10 @@ def main():
             logger.info(*a, **kw)
 
     set_seed(args.seed)
-    log_on_main(f"【训练启动】时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    log_on_main(f"设备类型: {device_type.upper()} | World Size: {dist.get_world_size()}")
+    log_on_main(f"[Training Start] Time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    log_on_main(f"Device type: {device_type.upper()} | World Size: {dist.get_world_size()}")
 
-    log_on_main(f"【模型加载】开始加载模型: {args.model_name_or_path}")
+    log_on_main(f"[Model Loading] Starting to load model: {args.model_name_or_path}")
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
     
     model = AutoModel.from_pretrained(
@@ -199,25 +199,25 @@ def main():
         if hasattr(model, "model") and hasattr(model.model, "set_activation_checkpointing"):
             model.model.set_activation_checkpointing(chosen)
             if chosen is None:
-                log_on_main("Activation checkpointing: 已关闭 (off).")
+                log_on_main("Activation checkpointing: disabled (off).")
             else:
-                log_on_main(f"Activation checkpointing: 已启用 -> {args.ckpt_strategy}.")
+                log_on_main(f"Activation checkpointing: enabled -> {args.ckpt_strategy}.")
         else:
-            log_on_main("Activation checkpointing: 未找到 LLaDA 接口，尝试退回 HF 通用开关…")
+            log_on_main("Activation checkpointing: LLaDA interface not found, trying the HF generic fallback switch...")
             if getattr(model, "gradient_checkpointing_enable", None):
                 model.gradient_checkpointing_enable()
-                log_on_main("HF gradient checkpointing: 已启用（兼容回退）。")
+                log_on_main("HF gradient checkpointing: enabled (compatibility fallback).")
             else:
-                log_on_main("未能启用任何 checkpointing 接口。")
+                log_on_main("Failed to enable any checkpointing interface.")
     except Exception as e:
-        log_on_main(f"启用 checkpointing 时出错：{e}")
+        log_on_main(f"Error while enabling checkpointing: {e}")
 
-    log_on_main(f"【数据集加载】开始加载数据: {args.dataset_name}")
+    log_on_main(f"[Dataset Loading] Starting to load data: {args.dataset_name}")
     raw_datasets = load_dataset('text', data_files={'train': args.dataset_name})
 
     if args.local_rank != 0:
         dist.barrier()
-    log_on_main("【数据集预处理】开始分词和分组...")
+    log_on_main("[Dataset Preprocessing] Starting tokenization and grouping...")
 
     def tokenize_function(examples):
         return tokenizer(examples["text"], add_special_tokens=False)
@@ -243,7 +243,7 @@ def main():
         dist.barrier()
     
     train_dataset = lm_datasets["train"]
-    log_on_main(f"分组完成，训练集样本数: {len(train_dataset)}")
+    log_on_main(f"Grouping completed, number of training samples: {len(train_dataset)}")
     
     sampler = DistributedSampler(train_dataset)
     pin_mem = device_type == "cuda"
@@ -259,12 +259,12 @@ def main():
     
     grad_accum_steps = 1
     if args.deepspeed_config:
-        log_on_main(f"从 {args.deepspeed_config} 加载 DeepSpeed 配置...")
+        log_on_main(f"Loading DeepSpeed configuration from {args.deepspeed_config}...")
         with open(args.deepspeed_config, 'r') as f:
             ds_config = json.load(f)
         grad_accum_steps = ds_config.get("gradient_accumulation_steps", 1)
     
-    log_on_main(f"梯度累积步数 (Gradient Accumulation Steps): {grad_accum_steps}")
+    log_on_main(f"Gradient accumulation steps: {grad_accum_steps}")
 
     updates_per_epoch = math.ceil(len(train_dataloader) / grad_accum_steps)
     if args.max_train_steps is None:
@@ -284,13 +284,13 @@ def main():
         dist_init_required=False,
     )
     
-    log_on_main(f"【训练开始】全局总步数: {num_training_steps}")
+    log_on_main(f"[Training Begin] Total global steps: {num_training_steps}")
     progress_bar = tqdm(range(num_training_steps), disable=not is_main_process)
     completed_steps = 0
     model_engine.train()
 
     for epoch in range(args.num_train_epochs):
-        log_on_main(f"--- 第 {epoch + 1}/{args.num_train_epochs} 轮 ---")
+        log_on_main(f"--- Epoch {epoch + 1}/{args.num_train_epochs} ---")
         sampler.set_epoch(epoch)
         
         for step, batch in enumerate(train_dataloader):
@@ -315,7 +315,7 @@ def main():
             
             if torch.isnan(final_loss) or torch.isinf(final_loss):
                 model_engine.zero_grad()
-                log_on_main(f"检测到异常损失值 (NaN/Inf) 在 step {completed_steps}，已跳过。")
+                log_on_main(f"Abnormal loss value (NaN/Inf) detected at step {completed_steps}; skipped.")
                 continue
 
             model_engine.backward(final_loss)
@@ -330,7 +330,7 @@ def main():
         if completed_steps >= num_training_steps:
             break
 
-    log_on_main("\n【模型保存】训练完成，开始保存 safetensors 权重...")
+    log_on_main("\n[Model Saving] Training completed. Starting to save safetensors weights...")
     try:
         save_hf_checkpoint_zero3(
             model_engine=model_engine,
@@ -340,10 +340,10 @@ def main():
         )
     except Exception:
         if is_main_process:
-            logger.error(f"!!!!!! 在【模型保存】步骤发生错误 !!!!!!")
+            logger.error("!!!!!! An error occurred during the [Model Saving] step !!!!!!")
             traceback.print_exc()
 
-    log_on_main(f"\n【训练结束】")
+    log_on_main("\n[Training Finished]")
 
 if __name__ == "__main__":
     main()

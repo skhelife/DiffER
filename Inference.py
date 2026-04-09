@@ -12,12 +12,14 @@ INPUT_FILES = [
 ]
 OUTPUT_PREFIX = "answers_"
 BATCH_SIZE = 1
-GEN_LENGTH = 40  
-STEPS = 40       
-BLOCK_LENGTH = 8 
+GEN_LENGTH = 40
+STEPS = 40
+BLOCK_LENGTH = 8
 CFG_SCALE = 1.0
+
+
 def add_gumbel_noise(logits, temperature):
-    """为 logits 添加 Gumbel 噪声以进行采样。"""
+    """Add Gumbel noise to logits for sampling."""
     if temperature == 0:
         return logits
     logits = logits.to(torch.float64)
@@ -25,10 +27,12 @@ def add_gumbel_noise(logits, temperature):
     gumbel_noise = (- torch.log(noise)) ** temperature
     return logits.exp() / gumbel_noise
 
+
 def get_num_transfer_tokens(mask_index, steps):
-    """计算每一步需要揭示（unmask）的 token 数量。"""
+    """Compute the number of tokens to reveal (unmask) at each step."""
     mask_num = mask_index.sum(dim=1, keepdim=True)
-    if steps == 0: return torch.zeros(mask_num.size(0), 0, device=mask_index.device, dtype=torch.int64)
+    if steps == 0:
+        return torch.zeros(mask_num.size(0), 0, device=mask_index.device, dtype=torch.int64)
     base = mask_num // steps
     remainder = mask_num % steps
     num_transfer_tokens = torch.zeros(mask_num.size(0), steps, device=mask_index.device, dtype=torch.int64) + base
@@ -36,10 +40,11 @@ def get_num_transfer_tokens(mask_index, steps):
         num_transfer_tokens[i, :remainder[i]] += 1
     return num_transfer_tokens
 
+
 @torch.no_grad()
 def generate_answer(model, prompts, tokenizer, steps, gen_length, block_length, temperature=0.,
                     cfg_scale=0., remasking='low_confidence', mask_id=126336):
-    """为一批 prompts 生成答案的核心函数。"""
+    """Core function for generating answers for a batch of prompts."""
     batch_size, prompt_length = prompts.shape
     x = torch.full((batch_size, prompt_length + gen_length), mask_id, dtype=torch.long).to(model.device)
     x[:, :prompt_length] = prompts.clone()
@@ -47,12 +52,12 @@ def generate_answer(model, prompts, tokenizer, steps, gen_length, block_length, 
     prompt_index = torch.zeros_like(x, dtype=torch.bool)
     prompt_index[:, :prompt_length] = True
 
-    assert gen_length % block_length == 0, "gen_length 必须是 block_length 的整数倍"
+    assert gen_length % block_length == 0, "gen_length must be an integer multiple of block_length"
     num_blocks = gen_length // block_length
 
     if steps % num_blocks != 0:
         steps = (steps // num_blocks) * num_blocks if (steps // num_blocks) > 0 else num_blocks
-        print(f"提示：steps已自动调整为{steps}以匹配分块设置。")
+        print(f"Notice: steps has been automatically adjusted to {steps} to match the block configuration.")
 
     steps_per_block = steps // num_blocks
 
@@ -98,7 +103,8 @@ def generate_answer(model, prompts, tokenizer, steps, gen_length, block_length, 
             for j in range(confidence.shape[0]):
                 block_confidence = confidence[j, block_start_index:block_end_index]
                 k = min(num_transfer_tokens[j, i].item(), (block_confidence > -float('inf')).sum().item())
-                if k == 0: continue
+                if k == 0:
+                    continue
 
                 _, select_indices_in_block = torch.topk(block_confidence, k=k)
                 select_indices = select_indices_in_block + block_start_index
@@ -107,30 +113,31 @@ def generate_answer(model, prompts, tokenizer, steps, gen_length, block_length, 
             x = torch.where(transfer_index, x0, x)
     return x
 
+
 def run_inference_on_file(model, tokenizer, device, input_file, output_file):
-    """读取文件，批量生成答案并保存。"""
-    print(f"\n--- 正在处理文件: {input_file} ---")
+    """Read a file, generate answers in batches, and save them."""
+    print(f"\n--- Processing file: {input_file} ---")
     if not os.path.exists(input_file):
-        print(f"警告: 未找到输入文件 '{input_file}', 已跳过。")
+        print(f"Warning: Input file '{input_file}' was not found, skipping.")
         return
 
     with open(input_file, 'r', encoding='utf-8') as f:
         questions = [line.strip() for line in f if line.strip()]
     
-    print(f"找到 {len(questions)} 个问题。开始使用批量大小 {BATCH_SIZE} 生成答案...")
+    print(f"Found {len(questions)} questions. Starting answer generation with batch size {BATCH_SIZE}...")
     
     remasking_strategy = 'low_confidence'
-    print(f"为Base SFT模型，已指定使用 '{remasking_strategy}' remasking策略。")
+    print(f"For the Base SFT model, the '{remasking_strategy}' remasking strategy has been specified.")
 
     with open(output_file, 'w', encoding='utf-8') as f_out:
-        for i in tqdm(range(0, len(questions), BATCH_SIZE), desc=f"处理 {os.path.basename(input_file)}"):
+        for i in tqdm(range(0, len(questions), BATCH_SIZE), desc=f"Processing {os.path.basename(input_file)}"):
             batch_questions = questions[i:i + BATCH_SIZE]
             
             inputs = tokenizer(batch_questions, return_tensors="pt", padding=True, truncation=True, max_length=512).to(device)
 
             output_ids = generate_answer(
-                model, inputs['input_ids'], tokenizer, 
-                steps=STEPS, gen_length=GEN_LENGTH, block_length=BLOCK_LENGTH, 
+                model, inputs['input_ids'], tokenizer,
+                steps=STEPS, gen_length=GEN_LENGTH, block_length=BLOCK_LENGTH,
                 cfg_scale=CFG_SCALE, remasking=remasking_strategy
             )
 
@@ -139,35 +146,36 @@ def run_inference_on_file(model, tokenizer, device, input_file, output_file):
             for idx, answer in enumerate(answers):
                 original_question_index = i + idx
                 clean_answer_for_print = answer.strip().replace('\n', ' ')
-                print(f"  样本 {original_question_index+1}: 问题='{batch_questions[idx][:30]}...', 答案='{clean_answer_for_print[:50]}...'")
+                print(f"  Sample {original_question_index+1}: Question='{batch_questions[idx][:30]}...', Answer='{clean_answer_for_print[:50]}...'")
                 f_out.write(answer.strip().replace('\n', ' ') + '\n')
-                f_out.flush() 
-    print(f"答案已成功保存到: {output_file}")
+                f_out.flush()
+    print(f"Answers have been successfully saved to: {output_file}")
+
 
 def main():
-    """主函数"""
+    """Main function."""
     if torch.cuda.is_available():
         device = 'cuda'
     elif hasattr(torch, 'npu') and torch.npu.is_available():
         device = 'npu'
     else:
         device = 'cpu'
-    print(f"使用的设备: {device}")
+    print(f"Using device: {device}")
 
     if not os.path.exists(MODEL_PATH):
-        print(f"错误: 模型路径 '{MODEL_PATH}' 不存在。")
+        print(f"Error: Model path '{MODEL_PATH}' does not exist.")
         return
 
-    print("正在加载模型和分词器...")
+    print("Loading model and tokenizer...")
     try:
         model = AutoModel.from_pretrained(MODEL_PATH, trust_remote_code=True, torch_dtype=torch.bfloat16).to(device).eval()
         tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, trust_remote_code=True)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
             model.config.pad_token_id = tokenizer.eos_token_id
-        print("模型加载成功！")
+        print("Model loaded successfully!")
     except Exception as e:
-        print(f"模型加载失败: {e}")
+        print(f"Model loading failed: {e}")
         return
 
     for input_file in INPUT_FILES:
@@ -175,6 +183,7 @@ def main():
         name_without_ext = os.path.splitext(base_name)[0]
         output_file = f"{OUTPUT_PREFIX}{name_without_ext}(token).txt"
         run_inference_on_file(model, tokenizer, device, input_file, output_file)
+
 
 if __name__ == "__main__":
     main()

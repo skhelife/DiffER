@@ -7,14 +7,14 @@ SCRIPT_PATH="pretrainwem.py"
 MODEL_DIR="input_model"
 DATA_FILE="origin_prompt.txt"
 
-# 实体列表文件路径 (用于全实体感知掩码)
+# Path to the entity list file (used for full entity-aware masking)
 
 ENTITY_FILE="entity_names.txt"
 
-# 训练产物 (模型权重、日志等) 的输出目录
+# Output directory for training artifacts (model weights, logs, etc.)
 OUTPUT_DIR="output_model"
 
-# DeepSpeed 配置文件的路径
+# Path to the DeepSpeed configuration file
 DS_CONFIG="ds_config.json"
 
 
@@ -38,11 +38,11 @@ NUM_WORKERS=${NUM_WORKERS:-4}
 CKPT_STRATEGY=${CKPT_STRATEGY:-"whole_layer"}
 
 
-[[ -f "$SCRIPT_PATH" ]] || { echo "错误: 找不到训练脚本: $SCRIPT_PATH"; exit 1; }
-[[ -d "$MODEL_DIR" ]]   || { echo "错误: 找不到模型目录: $MODEL_DIR"; exit 1; }
-[[ -f "$DATA_FILE" ]]   || { echo "错误: 找不到数据文件: $DATA_FILE"; exit 1; }
-[[ -f "$DS_CONFIG" ]]   || { echo "错误: 找不到 DeepSpeed 配置文件: $DS_CONFIG"; exit 1; }
-[[ -f "$ENTITY_FILE" ]] || { echo "警告: 找不到实体文件: $ENTITY_FILE. 训练将退回标准随机掩码模式。"; }
+[[ -f "$SCRIPT_PATH" ]] || { echo "Error: Training script not found: $SCRIPT_PATH"; exit 1; }
+[[ -d "$MODEL_DIR" ]]   || { echo "Error: Model directory not found: $MODEL_DIR"; exit 1; }
+[[ -f "$DATA_FILE" ]]   || { echo "Error: Data file not found: $DATA_FILE"; exit 1; }
+[[ -f "$DS_CONFIG" ]]   || { echo "Error: DeepSpeed config file not found: $DS_CONFIG"; exit 1; }
+[[ -f "$ENTITY_FILE" ]] || { echo "Warning: Entity file not found: $ENTITY_FILE. Training will fall back to standard random masking mode."; }
 
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -51,13 +51,13 @@ mkdir -p "$OUTPUT_DIR" "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/pretrain_${TIMESTAMP}.log"
 
 echo "====================================================="
-echo "🚀 开始 LLaDA 实体感知预训练任务"
+echo "Starting the LLaDA entity-aware pretraining task"
 echo "====================================================="
-echo "模型路径: $MODEL_DIR"
-echo "数据文件: $DATA_FILE"
-echo "实体文件: $ENTITY_FILE"
-echo "输出目录: $OUTPUT_DIR"
-echo "日志将保存到: $LOG_FILE"
+echo "Model path: $MODEL_DIR"
+echo "Data file: $DATA_FILE"
+echo "Entity file: $ENTITY_FILE"
+echo "Output directory: $OUTPUT_DIR"
+echo "Log will be saved to: $LOG_FILE"
 echo "-----------------------------------------------------"
 
 
@@ -83,6 +83,6 @@ torchrun --nproc_per_node="${NPROC_PER_NODE}" --master_addr="${MASTER_ADDR}" --m
 set +x
 export PYTHONPATH="$PYTHONPATH:$MODEL_DIR"
 echo "-----------------------------------------------------"
-echo "✅ 训练任务已完成或中断。"
-echo "日志已保存在: $LOG_FILE"
+echo "The training task has completed or been interrupted."
+echo "The log has been saved at: $LOG_FILE"
 echo "====================================================="

@@ -18,16 +18,16 @@ EPOCHS=${EPOCHS:-50}
 MAXLEN=${MAXLEN:-128}
 NUM_WORKERS=${NUM_WORKERS:-4}
 
-[[ -f "$SCRIPT" ]] || { echo "找不到训练脚本: $SCRIPT"; exit 1; }
-[[ -d "$MODEL_DIR" ]] || { echo "找不到模型目录: $MODEL_DIR"; exit 1; }
-[[ -f "$DATA_FILE" ]] || { echo "找不到数据文件: $DATA_FILE"; exit 1; }
-[[ -f "$DS_CONFIG" ]] || { echo "找不到 DeepSpeed 配置: $DS_CONFIG"; exit 1; }
+[[ -f "$SCRIPT" ]] || { echo "Training script not found: $SCRIPT"; exit 1; }
+[[ -d "$MODEL_DIR" ]] || { echo "Model directory not found: $MODEL_DIR"; exit 1; }
+[[ -f "$DATA_FILE" ]] || { echo "Data file not found: $DATA_FILE"; exit 1; }
+[[ -f "$DS_CONFIG" ]] || { echo "DeepSpeed config not found: $DS_CONFIG"; exit 1; }
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_DIR="${OUTPUT_DIR}/logs"; mkdir -p "$OUTPUT_DIR" "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/train_${TIMESTAMP}.log"
 
-echo "日志写入: $LOG_FILE"
+
 
 set -x
 export CUDA_VISIBLE_DEVICES=2,3

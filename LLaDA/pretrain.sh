@@ -6,13 +6,11 @@ SCRIPT_PATH="pretrain.py"
 
 
 MODEL_DIR="input_model"
-# 预训练用的数据集文件路径 (一个大的 .txt 文件)
+
 DATA_FILE="origin_prompts.txt"
 
-# 训练产物 (模型权重、日志等) 的输出目录
 OUTPUT_DIR="output_dir"
 
-# DeepSpeed 配置文件的路径
 DS_CONFIG="ds_config.json"
 
 
@@ -38,10 +36,10 @@ CKPT_STRATEGY=${CKPT_STRATEGY:-"whole_layer"}
 
 
 
-[[ -f "$SCRIPT_PATH" ]] || { echo "错误: 找不到训练脚本: $SCRIPT_PATH"; exit 1; }
-[[ -d "$MODEL_DIR" ]]   || { echo "错误: 找不到模型目录: $MODEL_DIR"; exit 1; }
-[[ -f "$DATA_FILE" ]]   || { echo "错误: 找不到数据文件: $DATA_FILE"; exit 1; }
-[[ -f "$DS_CONFIG" ]]   || { echo "错误: 找不到 DeepSpeed 配置文件: $DS_CONFIG"; exit 1; }
+[[ -f "$SCRIPT_PATH" ]] || { echo "Error: Training script not found: $SCRIPT_PATH"; exit 1; }
+[[ -d "$MODEL_DIR" ]]   || { echo "Error: Model directory not found: $MODEL_DIR"; exit 1; }
+[[ -f "$DATA_FILE" ]]   || { echo "Error: Data file not found: $DATA_FILE"; exit 1; }
+[[ -f "$DS_CONFIG" ]]   || { echo "Error: DeepSpeed config file not found: $DS_CONFIG"; exit 1; }
 
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -49,19 +47,14 @@ LOG_DIR="${OUTPUT_DIR}/logs"
 mkdir -p "$OUTPUT_DIR" "$LOG_DIR"
 LOG_FILE="${LOG_DIR}/pretrain_${TIMESTAMP}.log"
 
-echo "====================================================="
-echo "🚀 开始 LLaDA 预训练任务"
-echo "====================================================="
-echo "模型路径: $MODEL_DIR"
-echo "数据文件: $DATA_FILE"
-echo "输出目录: $OUTPUT_DIR"
-echo "日志将保存到: $LOG_FILE"
-echo "-----------------------------------------------------"
+
 
 
 
 
 set -x
+export CUDA_VISIBLE_DEVICES=2,3
+
 torchrun --nproc_per_node="${NPROC_PER_NODE}" --master_addr="${MASTER_ADDR}" --master_port="${MASTER_PORT}" \
     "$SCRIPT_PATH" \
     --model_name_or_path "$MODEL_DIR" \
@@ -78,9 +71,4 @@ torchrun --nproc_per_node="${NPROC_PER_NODE}" --master_addr="${MASTER_ADDR}" --m
     2>&1 | tee "$LOG_FILE"
 
 
-set +x
-export PYTHONPATH="$PYTHONPATH:$MODEL_DIR"
-echo "-----------------------------------------------------"
-echo "✅ 训练任务已完成或中断。"
-echo "日志已保存在: $LOG_FILE"
-echo "====================================================="c
+
